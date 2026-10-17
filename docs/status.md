@@ -436,12 +436,23 @@ byte). All placed through the faults' own freeze frames (fault 100
 carries VB, 111 V_REF_1/2) with one channel at a time set apart.
 `Sensors` holds them at 13.8 V and 5.0 V.
 
-With everything attached: 100 remains, from bit 11 of 0xFD5E, set at
-0x0C7C5E when 0xFDC6 bit 0 ("fuel level valid", a copy of 0xFDA0 bit 6 at
-0x0D61AE) is still clear a second after the key (C_T_DLY_IGK_FTL); bit 10
-(the level under C_FTL_DMTL_MIN) clears once the cluster frame is read.
-0xFDA0 is only written by a routine at 0x0C2164-0x0C2372, called from
-message handlers at 0x0DC6xx that never run here. Not followed further.
+With everything attached (the K line tool now also puts the other
+modules on the bus): 100 remains, from bit 11 of 0xFD5E, set at 0x0C7C5E
+when 0xFDC6 bit 0 is still clear a second after the key (C_T_DLY_IGK_FTL,
+cal 0x70C8F); bit 10, the tank level under C_FTL_DMTL_MIN, clears once
+the cluster frame has been read, which is why the stored freeze frame
+still shows both (0x0C) while the live word shows 0x0800. The two bits
+are the tank-leak diagnosis module's (DMTL) preconditions: the check
+runs under cal 0x70B1C ("Configuration DiagnosticModuleTankLeakage", 1
+here). 0xFDC6.0 is bit 6 of a fault's status word, copied at 0x0D61AE
+right after the fault debounce 0x0AB27C on the record at 0x04195A (its
+status byte reads 0x18 and never gains bit 6 here). What sets that bit
+on the car -- presumably the leak test having run and passed -- the
+emulator has no module for. Switching the configuration byte off in the
+CPU's flash copy changes the fault to 0x06 and brings fault 48 back, so
+that is not an answer either. Left as the one code a tester sees at
+key-on; not harmful.
+
 Then 128 while idling at a speed the program cannot hold (see "The
 idle"), and 15 and 105 on a drive, with the oxygen sensors now following
 the mixture (`Sensors.lambda_`, set by the plant and the bridge): names
@@ -489,5 +500,5 @@ ran on without it, and the throttle controller stayed off.
   bus; the limiter tables are by gear.
 - Under PyPy the bridge keeps real time at 6 M instructions a second with
   the plant; CPython does not.
-- Faults 100 (the fuel level validity flag), 128, 15 and 105: what the
-  program wants for them.
+- Faults 100 (the tank-leak module's status bit), 128, 15 and 105: what
+  the program wants for them.

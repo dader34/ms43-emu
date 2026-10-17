@@ -54,6 +54,7 @@ from ms43emu import load_file, eeprom        # noqa: E402
 from ms43emu.board import Board               # noqa: E402
 from ms43emu.sensors import Sensors           # noqa: E402
 from ms43emu.throttle import Throttle         # noqa: E402
+from ms43emu.e46 import Peers                 # noqa: E402
 
 SLICE_SECONDS = 0.0025   # module time between looks at the line
 PTY_ACTIVE_SECONDS = 120
@@ -362,8 +363,10 @@ def main():
     image = load_file(args.image)
     board = Board(image, ips=args.mips * 1_000_000)
     if not args.bare:
-        # a car around the module: its sensors at rest, the throttle it drives, a learnt EEPROM
+        # a car around the module: its sensors at rest, the throttle it drives, a learnt
+        # EEPROM, the other modules on the bus (the cluster's fuel level among them)
         Throttle(board, Sensors(board))
+        Peers(board)
         board.eeprom.words = eeprom.learnt(image, 0x68, 0x39C, 0x98, 0x36C)
     cpu = board.cpu
     IPS = board.ips
