@@ -1,7 +1,9 @@
 # Where it stands
 
-Status as of 2026-10-16. The program runs its tasks with the monitoring
-processor, answers DS2 on the K line and sends its CAN frames; no engine.
+Status as of 2026-10-17. The program runs its tasks with the monitoring
+processor, answers DS2 on the K line, sends and hears its CAN frames,
+reads its sensors, drives its throttle, and runs an engine model or a
+BeamNG car (bridge.py, beamng/).
 
 ## The read
 
@@ -308,3 +310,137 @@ half pedal gives about 44 degrees in 0.3 s.
   the program's injection and ignition;
 - the bridge to BeamNG;
 - the EWS release.
+
+## The plant
+
+`ms43emu/plant.py`: the engine the program controls. The air path is the
+program's own: its calibration holds the air it expects per cylinder
+filling for a throttle angle and a speed (the 16 x 16 "MAF diagnosis"
+table at cal 0x7AAEE, axes 0x75206 (degrees, 16 words x 0.00183) and
+0x74633 (rpm, 16 bytes x 32); XDF `IP_MAF_1_DIAG`), and `Air.from_image`
+reads it, so the plant and the program agree about what the plate does.
+Its closed plate leaks 80 mg a filling at 416 rpm and 33 at 896 (5-6
+kg/h); 2.5 degrees is already 200 mg at 896 rpm. Without an image `Air()`
+is an orifice-and-pump balance fitted to that table (a plate sitting 15
+degrees into the bore at its stop).
+
+Torque: fuel from the pulse width the program keeps at 0x040DAA (0.47 ms
+dead time, 4.05 mg/ms: fitted to the program's own 137 mg at 2.77 ms
+idling and 458 mg at 9.2 ms at full load), lambda against the air, a
+burn fraction, an ignition efficiency from the distance to MBT, 40 %
+thermal efficiency, less friction. `Dyno` integrates the speed from it
+against a load and turns the crank model (`engine.set_rpm`, which keeps
+the tooth pattern; `start` sends an edge at once and must not be called
+every step). The numbers are plausible, not measured: 232 Nm at 3000 rpm
+full load.
+
+With the pedal a third down the program starts the engine on the
+starter, runs it, holds it at its soft limiter with the throttle (the
+plate between 10 and 20 degrees around 6300-6500 rpm) and cuts the fuel
+on the overrun (tests/test_dyno.py).
+
+### The fuel cut and the limiter
+
+The program's overrun cut shows in 0x040DAA as 0.6-0.7 ms, the dead
+time: `plant.fuelled` takes anything under 0.8 ms as no fuel. Its hard
+limiter (ID_N_MAX_MAX_MT, cal 0x75D41, six bytes x 32 rpm by gear: 6592
+in the low gears) does not show there: past it the pulse width stays and
+the CC6-CC11 injection compares keep coming (seven a cycle a cylinder at
+any speed, so the compares are not the injection either; the injection
+stage's own cut is somewhere the emulator does not read). The bridge
+applies that limit itself (`plant.hard_limit_rpm`). The soft limiter
+(6496) works through the throttle: at a third of the pedal it holds; at
+full pedal the setpoint only comes down to 74 degrees and the engine
+over-revs, so the hard cut matters.
+
+## The idle
+
+The program does not open the throttle at idle speeds in the emulation,
+and the reason was followed all the way; what is left is a question
+about the car, not the emulator.
+
+- The throttle setpoint (0xE14E) is written at 0x099880 from 0x0406A4,
+  which 0x09B138 computes as the "driver wish" map IP_TPS_SP_PVS (cal
+  0x7E4DC, 12 x 12, columns rpm/32 from the byte at 0x04007F, rows the
+  pedal 0xE34A): pedal angle to throttle angle. Its rows below 17.5
+  degrees of pedal give 0 degrees of throttle from 512 to 2500 rpm
+  (2 degrees in the 416 rpm column); 17.5 gives 1.7, 20 gives 5.25.
+- The pedal fed to it is max(the driver's pedal 0x040FF6, the idle
+  governor's pedal equivalent 0x040FF8), at 0x0BD272.
+- The governor (0x0B1C86; running only with 0xFD2C bit 9, the "engine
+  running" state -- bit 8 is the start phase, where it resets itself)
+  has a feed-forward from the coolant (0x040884, 22 % at 20 C, 17 % at
+  90 C), a P term and an I term (0x040856, up to 96 %), a sum at
+  0x040888 (clamped at 134 %), its target at 0x040878 (978 rpm at 20 C
+  with catalyst heating, 700 warm) and n_dif at 0x0408DE. The sum goes
+  through the correction at 0x0B0FD2 (x 0x0408B8, ramped) into 0x0408A6
+  and the table IP_PVS_ISA_isapwm (cal 0x7BA30: 0..175 % to 0..20
+  degrees of pedal) times IP_FAC_PVS_ISA (1.0 at no pedal) at 0x0B10xx,
+  and comes out at 15 degrees at most.
+- 15 degrees of pedal is 0 degrees of throttle on that map. So the
+  program holds the plate at its closed stop whenever the engine turns
+  faster than the start phase, with the stop's leak (33-80 mg) for air,
+  and the plant stalls. The blocks that add idle air directly (0xE194
+  through 0x09B134) are the automatic gearbox's (0xFD2E bit 6, set only
+  with 0xFD9C bit 0, the automatic).
+
+Nothing modelled was found wanting: the CAN peers are heard (vehicle
+speed 0), the pedal reads 0, the coolant reads right, the states and
+flags change as they should. Either the car's stop lets through far
+more air than the program's own table says for 0 degrees, or an input
+not modelled raises the governor's pedal equivalent past 17.5 degrees.
+For BeamNG it does not matter: the car's engine idles itself below its
+idleRPM and the DME's plate adds on top. For the dyno, the pedal holds
+the engine.
+
+## The E46 bus
+
+`ms43emu/e46.py`: `Peers` sends the ASC's 0x153 (with the vehicle speed
+in bytes 1-2, 1/8 km/h), 0x1F3, 0x1F5 and the cluster's 0x613/0x615 at
+their periods, zeros otherwise; the gearbox's 0x43D/0x43F only when told
+the car is an automatic. All are received (can.received counts them);
+nothing in the idle or the limiter changed with them, so they are there
+for completeness and for the vehicle speed.
+
+## The EWS
+
+Not gating anything here. Over 38 s of running with the throttle,
+injection and ignition active, no EWS release ever sent and none
+modelled, the fault memory fills slowly (0x64 at key-on; 0x92, 0x93,
+0x8B, 0x80, 0x3F, 0x0F later; 0x30 is the lambda heater, as the XDF's
+C_DTC constants say) and nothing stops. The XDF knows only the EWS fault
+increments (C_ABC_INC_IMOB at cal 0x70A41, C_ABC_INC_TOUT_IMOB at
+0x70A6E), not a switch. A guess at why: the EEPROM here holds only the
+header and the learnt throttle, so the program has no ISN to insist on
+and runs as a new, unmarried module would. Not verified; the public
+EWS-delete patches (ms4x.net) were not needed.
+
+## The BeamNG bridge
+
+`ms43emu/bridge.py` and `tools/beamng.py`: the board with sensors,
+throttle, CAN peers and the program's air table, fed the car's rpm,
+pedal, temperatures, speed, key and starter, answering with the plate as
+a share of full-load air at that speed, a torque factor (burn fraction
+times ignition efficiency, 0 with the fuel cut or past the hard
+limiter), and its own readings. `encode`/`decode` are the JSON
+datagrams; the server keeps real time the way tools/kline.py does. The
+car side is `beamng/ms43dme` (README there): a vehicle Lua extension
+BeamNG loads for every car, which points the engine at
+`electrics.ms43Throttle` and fills it with throttle x torque.
+
+A key off and on (`Bridge.power`, `Board.power_cycle`) now resets the
+monitoring processor and the EEPROM's command state with the CPU: before,
+the monitor stayed mid-protocol, the program reset itself eight times and
+ran on without it, and the throttle controller stayed off.
+
+## Next
+
+- The idle: why the program's own driver-wish map gives no throttle for
+  the governor's pedal equivalent (the car's stop leak? an input?).
+- The injection stage's hard cut, so the bridge need not apply the
+  limiter itself; and the injector and coil outputs, which are not on
+  the port pins the program writes at engine rates.
+- The gear: the program keeps 0 at 0x0401AC (0x0D8D5E) with speed on the
+  bus; the limiter tables are by gear.
+- Under PyPy the bridge keeps real time at 6 M instructions a second with
+  the plant; CPython does not.

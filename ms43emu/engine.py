@@ -67,9 +67,29 @@ class Engine:
         return self.b.ips * 60.0 / (self.rpm * TEETH)
 
     def start(self, rpm):
-        """Turn at `rpm` from now on (0 stops it)."""
+        """Turn at `rpm` from now on (0 stops it), with an edge right away."""
         self.rpm = rpm
         self.next_at = self.b.cpu.instructions + 1 if rpm > 0 else NEVER
+        self.b.plan()
+
+    def set_rpm(self, rpm):
+        """Change the speed without disturbing the pattern: the edge due next
+        keeps its share of the pitch at the new speed. For a plant that
+        updates the speed every few milliseconds (plant.py, bridge.py);
+        `start` would send an edge at each update."""
+        if rpm <= 0:
+            self.rpm = 0.0
+            self.next_at = NEVER
+            self.b.plan()
+            return
+        if self.rpm <= 0 or self.next_at == NEVER:
+            self.start(rpm)
+            return
+        now = self.b.cpu.instructions
+        old_half = self.pitch_instructions() / 2
+        remaining = max(0, self.next_at - now)
+        self.rpm = rpm
+        self.next_at = now + max(1, int(remaining * (self.pitch_instructions() / 2) / old_half))
         self.b.plan()
 
     def _crank(self, level):

@@ -73,6 +73,14 @@ class Monitor:
         self._tx = self._frame()
         board.cpu.hook_write(sfr.SSCCON, self._ssccon)
 
+    def reset(self):
+        """Power off and on: the monitor starts over at hello, like the C167
+        beside it (it shares the supply)."""
+        self.last = None
+        self.question = 0
+        self._rx.clear()
+        self._tx = self._frame()
+
     # ---- the SPI side ------------------------------------------------------------
     def selected(self):
         cpu = self.b.cpu

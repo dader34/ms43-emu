@@ -117,6 +117,8 @@ class Board(Machine):
         low[0xC000:0xEF00] = bytes(0x2F00)
         low[0xF200:0xFE00] = bytes(0xC00)
         self.cpu.ext_ram[0x040000:0x042000] = bytes(0x2000)
+        self.monitor.reset()                   # it shares the supply: back to hello
+        self.eeprom.latch(0)                   # chip select gone with the power: no command half done
         self.cpu.reset()
 
     # ---- the K line ---------------------------------------------------------------
