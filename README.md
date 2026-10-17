@@ -80,7 +80,7 @@ PyPy is what keeps the module in real time (the K line, BeamNG); with
 
     uv python install pypy@3.11
     uv venv .pypy --python pypy3.11 && uv pip install --python .pypy/bin/python -e ../c166-emu -e '.[test]'
-    .pypy/bin/python -m pytest -q                            # 32 tests, under a minute
+    .pypy/bin/python -m pytest -q                            # 33 tests, under a minute
     .pypy/bin/python tools/beamng.py --print                 # the DME for BeamNG on UDP 4343
 
 ## Ghidra
