@@ -1,0 +1,15 @@
+[project]
+name = "ms43emu"
+version = "0.1.0"
+description = "Emulation of the Siemens MS43 DME (C167CS, M54) from a full flash read, for testing firmware patches"
+requires-python = ">=3.11"
+dependencies = ["c166emu"]     # ../c166-emu, installed with pip install -e ../c166-emu
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools]
+packages = ["ms43emu"]

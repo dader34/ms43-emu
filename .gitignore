@@ -1,0 +1,11 @@
+.venv/
+.pypy/
+__pycache__/
+.pytest_cache/
+# BMW-derived flash images never go in the repo
+images/*
+!images/README.md
+*.egg-info/
+# decompiled firmware is BMW-derived too; ghidra/decomp.sh makes it again
+ghidra/out/*
+!ghidra/out/.gitkeep
