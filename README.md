@@ -46,14 +46,29 @@ ten seconds tried.
     ../gs20-emu/.pypy/bin/pypy3 tools/kline.py --ws 8767 --trace     # then https://bmweb.danner.ink/?gateway=ws://localhost:8767
     ../gs20-emu/.pypy/bin/pypy3 tools/bringup.py      # the reset path on the bare CPU, step by step
 
-Not yet: the engine. No crank or cam signal, no injection or ignition
-outputs (CAPCOM compare), no sensors beyond what the A/D converter's
-default reading gives, nobody on CAN, no flashing, no checksums, and the
-monitor's own measurements read zero. `docs/status.md` has the state and
-the next steps.
+The engine: `b.engine.start(rpm)` turns a 60-2 crank and the two cams; the
+program syncs and schedules ignition and injection from cranking to 6000
+rpm. `ms43emu/sensors.py` feeds the A/D inputs (air mass, pedal, throttle,
+coolant, intake air), `ms43emu/eeprom.py` is the 93C86 (`eeprom.learnt()`
+gives it a learnt throttle) and `ms43emu/throttle.py` is the electronic
+throttle the program drives in closed loop:
+
+    from ms43emu import eeprom
+    from ms43emu.sensors import Sensors
+    from ms43emu.throttle import Throttle
+    img = load_image("stock")
+    b = Board(img); s = Sensors(b); t = Throttle(b, s)
+    b.eeprom.words = eeprom.learnt(img, 0x68, 0x39C, 0x98, 0x36C)
+    b.cpu.reset(); b.run(IPS)
+    b.engine.start(800); s.maf_kgh = 20; s.pedal = 0.5
+    b.run(IPS); print(t.deg)
+
+Not yet: an engine model (air and torque), nobody else on CAN, the EWS.
+`docs/status.md` has the state and the next steps.
 
 ## Setup
 
+    git clone https://github.com/dader34/c166-emu ../c166-emu   # the shared C167 core
     python3.11 -m venv .venv            # or newer
     .venv/bin/pip install -e ../c166-emu -e '.[test]'
 
