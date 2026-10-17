@@ -306,6 +306,8 @@ class Dyno:
         mg = self.air.mg(self.throttle.deg, self.rpm, self.sensors.intake_c)
         full = self.air.mg(MAX_DEG, self.rpm, self.sensors.intake_c)
         inj = v["injector_ms"] if fuelled(v["injector_ms"]) else 0.0
+        fuel = fuel_mg(inj)
+        self.sensors.lambda_ = mg / (STOICH * fuel) if fuel > 0 and self.rpm > 0 else 99.0
         self.torque_nm = torque_nm(mg, self.rpm, inj, advance, self.sensors.coolant_c, full) if self.rpm > 0 else 0.0
         net = self.torque_nm + self.starter_nm - self.load_nm
         if self.rpm <= 0 and net <= 0:

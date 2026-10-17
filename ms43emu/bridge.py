@@ -99,6 +99,13 @@ class Bridge:
         while b.cpu.instructions < end:
             b.run(min(step, end - b.cpu.instructions))
             self.sensors.maf_kgh = self.air.kgh(self.throttle.deg, self.rpm, self.intake_c)
+            self._mixture()
+
+    def _mixture(self):
+        """The oxygen sensors see what the program's fuel makes of the air it fuels for."""
+        v = live.read(self.board)
+        fuel = plant.fuel_mg(v["injector_ms"]) if plant.fuelled(v["injector_ms"]) else 0.0
+        self.sensors.lambda_ = v["load_mg"] / (plant.STOICH * fuel) if fuel > 0 and self.rpm > 0 else 99.0
 
     # ---- the DME's side --------------------------------------------------------------
     def outputs(self):

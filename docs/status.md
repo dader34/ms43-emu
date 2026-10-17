@@ -393,14 +393,59 @@ For BeamNG it does not matter: the car's engine idles itself below its
 idleRPM and the DME's plate adds on top. For the dyno, the pedal holds
 the engine.
 
-## The E46 bus
+## The E46 bus and the speed wire
 
 `ms43emu/e46.py`: `Peers` sends the ASC's 0x153 (with the vehicle speed
-in bytes 1-2, 1/8 km/h), 0x1F3, 0x1F5 and the cluster's 0x613/0x615 at
-their periods, zeros otherwise; the gearbox's 0x43D/0x43F only when told
-the car is an automatic. All are received (can.received counts them);
-nothing in the idle or the limiter changed with them, so they are there
-for completeness and for the vehicle speed.
+in bytes 1-2, 1/8 km/h), 0x1F3, 0x1F5 and the cluster's 0x613 (the fuel
+level in byte 2, litres) and 0x615 at their periods, zeros otherwise;
+the gearbox's 0x43D/0x43F only when told the car is an automatic. The
+program polls its objects for NEWDAT (0x0D42EC copies a frame's
+configuration byte and data into 0xE1A2.., every object in turn) with
+the CAN interrupt disabled; the tank level goes from 0xE1A5 to 0x040102.
+
+That took three corrections to c166-emu's CAN model (its branch of the
+same name): data at +7 after the configuration byte, not +8 (every frame
+either way was a byte off; DME1 now carries its rpm in bytes 2-3 as
+published); NEWDAT/INTPND set as the chip shows a set pair ('10', the
+program tests for exactly that); the interrupt only when the firmware
+enabled it (the MS43 does not, and each frame was running its XP0
+handler, the SPI job scheduler).
+
+The vehicle speed the program uses is not the CAN one but a pulse train
+on CC30 (P7.6, captured on the falling edge; the handler 0x0EB9F0 counts
+the pulses into 0xE5EA and keeps the periods at 0xE5EC..; 0x0DD12C makes
+the speed of them, wanting at least three pulses in two seconds), as the
+ASC/DSC puts it on a wire: 6.97 pulses a second per km/h, C_VS_FAC = 6274
+a kilometre times four, checked at 50, 100 and 200 Hz and at 60 and 120
+km/h. `Peers.set_speed` drives both; `set_fuel` the level.
+
+## The faults a tester sees
+
+`tools/kline.py` now puts the sensors, the throttle and a learnt EEPROM
+around the module (`--bare` for the board alone). Bare, a tester reads
+five faults at key-on: 100 (control unit), 111 (pedal sensor 2 shorted to
+battery), 146/147 (the throttle potentiometers) and 48 (the monitor's
+pedal reading against the C167's): every A/D input at the converter's
+default of 0x300, so 3.74 V on the pedal and throttle, 19.6 V battery,
+7.5 V references, and the monitor reporting 0 V.
+
+The battery voltage is A/D channel 5 (0xE7DD, 0x04007C; the ignition
+key's is channel 1, 0xE7DE), 0.102 V a byte of count >> 2; the two 5 V
+references are multiplexer B's slots 0 and 1 (0x04008A/8B, 0.0392 V a
+byte). All placed through the faults' own freeze frames (fault 100
+carries VB, 111 V_REF_1/2) with one channel at a time set apart.
+`Sensors` holds them at 13.8 V and 5.0 V.
+
+With everything attached: 100 remains, from bit 11 of 0xFD5E, set at
+0x0C7C5E when 0xFDC6 bit 0 ("fuel level valid", a copy of 0xFDA0 bit 6 at
+0x0D61AE) is still clear a second after the key (C_T_DLY_IGK_FTL); bit 10
+(the level under C_FTL_DMTL_MIN) clears once the cluster frame is read.
+0xFDA0 is only written by a routine at 0x0C2164-0x0C2372, called from
+message handlers at 0x0DC6xx that never run here. Not followed further.
+Then 128 while idling at a speed the program cannot hold (see "The
+idle"), and 15 and 105 on a drive, with the oxygen sensors now following
+the mixture (`Sensors.lambda_`, set by the plant and the bridge): names
+to be read off a tester.
 
 ## The EWS
 
@@ -444,3 +489,5 @@ ran on without it, and the throttle controller stayed off.
   bus; the limiter tables are by gear.
 - Under PyPy the bridge keeps real time at 6 M instructions a second with
   the plant; CPython does not.
+- Faults 100 (the fuel level validity flag), 128, 15 and 105: what the
+  program wants for them.

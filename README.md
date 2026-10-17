@@ -29,7 +29,8 @@ What it can do today:
   identification comes back with part number 7551615, the fault memory
   and the status block too;
 - send its CAN frames: DME1 (0x316), DME2 (0x329) and DME4 (0x545), every
-  10 ms, and hear the E46's other modules (`ms43emu/e46.py`);
+  10 ms, hear the E46's other modules (`ms43emu/e46.py`: the fuel level
+  from the cluster) and read the vehicle speed off the ASC's pulse wire;
 - run its engine: the crank and cam signals (`engine.py`), the sensors
   (`sensors.py`), the serial EEPROM with a learnt throttle (`eeprom.py`),
   the electronic throttle it drives (`throttle.py`), and a plant
@@ -70,6 +71,9 @@ Images are BMW-derived and are not in the repo; see `images/README.md`.
 
     MS43_FULL=... .venv/bin/pytest
     PYTHONPATH=. ../gs20-emu/.pypy/bin/pypy3 -m pytest      # five times faster; c166-emu is installed there
+
+c166-emu is needed at its branch `claude/vigilant-rubin-osbmfk` or later
+(CAN frames one byte off, new-data flags the program never saw).
 
 PyPy is what keeps the module in real time (the K line, BeamNG); with
 `uv` it is one line:

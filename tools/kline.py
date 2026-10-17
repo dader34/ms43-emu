@@ -50,8 +50,10 @@ import tty
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from ms43emu import load_file                 # noqa: E402
+from ms43emu import load_file, eeprom        # noqa: E402
 from ms43emu.board import Board               # noqa: E402
+from ms43emu.sensors import Sensors           # noqa: E402
+from ms43emu.throttle import Throttle         # noqa: E402
 
 SLICE_SECONDS = 0.0025   # module time between looks at the line
 PTY_ACTIVE_SECONDS = 120
@@ -347,6 +349,8 @@ def main():
     ap.add_argument("--trace", action="store_true", help="print every telegram")
     ap.add_argument("--mips", type=int, default=6, choices=[6, 12],
                     help="million instructions per second of the module's time (default 6)")
+    ap.add_argument("--bare", action="store_true",
+                    help="the board alone: no sensors, throttle or learnt EEPROM (the tester then sees their faults)")
     args = ap.parse_args()
 
     lines = [Pty(args.link)]
@@ -357,6 +361,10 @@ def main():
 
     image = load_file(args.image)
     board = Board(image, ips=args.mips * 1_000_000)
+    if not args.bare:
+        # a car around the module: its sensors at rest, the throttle it drives, a learnt EEPROM
+        Throttle(board, Sensors(board))
+        board.eeprom.words = eeprom.learnt(image, 0x68, 0x39C, 0x98, 0x36C)
     cpu = board.cpu
     IPS = board.ips
     slice_instructions = int(SLICE_SECONDS * IPS)

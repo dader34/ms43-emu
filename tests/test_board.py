@@ -60,3 +60,24 @@ def test_identification(board):
     for c in answer:
         x ^= c
     assert x == 0
+
+
+def test_the_car_on_the_bus_and_the_wire_reach_the_program(stock):
+    """The cluster's fuel level (0x613 byte 2) and the speed pulses on CC30
+    come through: the program's tank level and vehicle speed read them."""
+    from ms43emu.sensors import Sensors
+    from ms43emu.throttle import Throttle
+    from ms43emu.e46 import Peers
+    from ms43emu import eeprom
+    b = Board(stock, ips=6_000_000)
+    Throttle(b, Sensors(b))
+    b.eeprom.words = eeprom.learnt(stock, 0x68, 0x39C, 0x98, 0x36C)
+    b.cpu.reset()
+    p = Peers(b)
+    p.set_fuel(33)
+    p.set_speed(60)
+    b.engine.start(2000)
+    b.run(3 * 6_000_000)
+    assert b.cpu.rb(0x040102) == 33                     # the tank level, litres
+    assert abs(b.cpu.rb(0x04047F) - 60) <= 1            # the vehicle speed, km/h
+    assert b.can.received > 100 and p.pulses > 1000
